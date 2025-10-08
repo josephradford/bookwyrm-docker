@@ -1,0 +1,250 @@
+version: '3.8'
+
+services:
+  # PostgreSQL database for Bookwyrm
+  bookwyrm-db:
+    image: postgres:16-alpine
+    container_name: bookwyrm-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${BOOKWYRM_DB_USER:-bookwyrm}
+      - POSTGRES_PASSWORD=${BOOKWYRM_DB_PASSWORD}
+      - POSTGRES_DB=${BOOKWYRM_DB_NAME:-bookwyrm}
+    volumes:
+      - ./data/pgdata:/var/lib/postgresql/data
+    networks:
+      - bookwyrm
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${BOOKWYRM_DB_USER:-bookwyrm}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Redis for activity streams
+  bookwyrm-redis-activity:
+    image: redis:7.2-alpine
+    container_name: bookwyrm-redis-activity
+    restart: unless-stopped
+    command: redis-server --requirepass ${BOOKWYRM_REDIS_ACTIVITY_PASSWORD} --appendonly yes
+    volumes:
+      - ./data/redis-activity:/data
+    networks:
+      - bookwyrm
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis for Celery broker
+  bookwyrm-redis-broker:
+    image: redis:7.2-alpine
+    container_name: bookwyrm-redis-broker
+    restart: unless-stopped
+    command: redis-server --requirepass ${BOOKWYRM_REDIS_BROKER_PASSWORD} --appendonly yes
+    volumes:
+      - ./data/redis-broker:/data
+    networks:
+      - bookwyrm
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Bookwyrm web application
+  bookwyrm:
+    build:
+      context: ./bookwyrm
+      dockerfile: Dockerfile
+    container_name: bookwyrm
+    restart: unless-stopped
+    working_dir: /app
+    command: gunicorn bookwyrm.wsgi:application --bind 0.0.0.0:8000
+    expose:
+      - 8000
+    environment:
+      # Domain and Security
+      - DOMAIN=${BOOKWYRM_DOMAIN}
+      - SECRET_KEY=${BOOKWYRM_SECRET_KEY}
+      - USE_HTTPS=${BOOKWYRM_USE_HTTPS:-false}
+      - CSRF_TRUSTED_ORIGINS=${BOOKWYRM_CSRF_TRUSTED_ORIGINS}
+
+      # Database
+      - POSTGRES_HOST=bookwyrm-db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${BOOKWYRM_DB_USER:-bookwyrm}
+      - POSTGRES_PASSWORD=${BOOKWYRM_DB_PASSWORD}
+      - POSTGRES_DB=${BOOKWYRM_DB_NAME:-bookwyrm}
+
+      # Redis
+      - REDIS_ACTIVITY_HOST=bookwyrm-redis-activity
+      - REDIS_ACTIVITY_PORT=6379
+      - REDIS_ACTIVITY_PASSWORD=${BOOKWYRM_REDIS_ACTIVITY_PASSWORD}
+      - REDIS_BROKER_HOST=bookwyrm-redis-broker
+      - REDIS_BROKER_PORT=6379
+      - REDIS_BROKER_PASSWORD=${BOOKWYRM_REDIS_BROKER_PASSWORD}
+      - CELERY_BROKER=redis://:${BOOKWYRM_REDIS_BROKER_PASSWORD}@bookwyrm-redis-broker:6379/0
+
+      # Email (optional - defaults to localhost which won't send emails)
+      - EMAIL_HOST=${BOOKWYRM_EMAIL_HOST:-localhost}
+      - EMAIL_PORT=${BOOKWYRM_EMAIL_PORT:-587}
+      - EMAIL_HOST_USER=${BOOKWYRM_EMAIL_USER:-bookwyrm@localhost}
+      - EMAIL_HOST_PASSWORD=${BOOKWYRM_EMAIL_PASSWORD:-unused}
+      - EMAIL_USE_TLS=${BOOKWYRM_EMAIL_USE_TLS:-false}
+      - EMAIL_USE_SSL=${BOOKWYRM_EMAIL_USE_SSL:-false}
+      - EMAIL_SENDER_NAME=${BOOKWYRM_EMAIL_SENDER_NAME:-BookWyrm}
+      - EMAIL_SENDER_DOMAIN=${BOOKWYRM_EMAIL_SENDER_DOMAIN:-${BOOKWYRM_DOMAIN}}
+
+      # Other settings
+      - TZ=${TIMEZONE:-UTC}
+      - LOCALE_LANGUAGE=en
+      - ENABLE_PREVIEW_IMAGES=true
+    volumes:
+      - ./bookwyrm:/app
+      - ./data/images:/app/bookwyrm/static/images
+      - bookwyrm_static:/app/static
+    networks:
+      - bookwyrm
+    depends_on:
+      bookwyrm-db:
+        condition: service_healthy
+      bookwyrm-redis-activity:
+        condition: service_healthy
+      bookwyrm-redis-broker:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Celery worker for background tasks
+  bookwyrm-celery:
+    build:
+      context: ./bookwyrm
+      dockerfile: Dockerfile
+    container_name: bookwyrm-celery
+    restart: unless-stopped
+    working_dir: /app
+    command: celery -A celerywyrm worker -l info -Q high_priority,medium_priority,low_priority,imports,broadcast
+    environment:
+      # Domain and Security
+      - DOMAIN=${BOOKWYRM_DOMAIN}
+      - SECRET_KEY=${BOOKWYRM_SECRET_KEY}
+
+      # Database
+      - POSTGRES_HOST=bookwyrm-db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${BOOKWYRM_DB_USER:-bookwyrm}
+      - POSTGRES_PASSWORD=${BOOKWYRM_DB_PASSWORD}
+      - POSTGRES_DB=${BOOKWYRM_DB_NAME:-bookwyrm}
+
+      # Redis
+      - REDIS_ACTIVITY_HOST=bookwyrm-redis-activity
+      - REDIS_ACTIVITY_PORT=6379
+      - REDIS_ACTIVITY_PASSWORD=${BOOKWYRM_REDIS_ACTIVITY_PASSWORD}
+      - REDIS_BROKER_HOST=bookwyrm-redis-broker
+      - REDIS_BROKER_PORT=6379
+      - REDIS_BROKER_PASSWORD=${BOOKWYRM_REDIS_BROKER_PASSWORD}
+      - CELERY_BROKER=redis://:${BOOKWYRM_REDIS_BROKER_PASSWORD}@bookwyrm-redis-broker:6379/0
+
+      # Email (optional - defaults to localhost which won't send emails)
+      - EMAIL_HOST=${BOOKWYRM_EMAIL_HOST:-localhost}
+      - EMAIL_PORT=${BOOKWYRM_EMAIL_PORT:-587}
+      - EMAIL_HOST_USER=${BOOKWYRM_EMAIL_USER:-bookwyrm@localhost}
+      - EMAIL_HOST_PASSWORD=${BOOKWYRM_EMAIL_PASSWORD:-unused}
+      - EMAIL_USE_TLS=${BOOKWYRM_EMAIL_USE_TLS:-false}
+      - EMAIL_USE_SSL=${BOOKWYRM_EMAIL_USE_SSL:-false}
+      - EMAIL_SENDER_NAME=${BOOKWYRM_EMAIL_SENDER_NAME:-BookWyrm}
+      - EMAIL_SENDER_DOMAIN=${BOOKWYRM_EMAIL_SENDER_DOMAIN:-${BOOKWYRM_DOMAIN}}
+
+      # Other settings
+      - TZ=${TIMEZONE:-UTC}
+    volumes:
+      - ./bookwyrm:/app
+      - ./data/images:/app/bookwyrm/static/images
+    networks:
+      - bookwyrm
+    depends_on:
+      bookwyrm-db:
+        condition: service_healthy
+      bookwyrm-redis-broker:
+        condition: service_healthy
+
+  # Celery beat scheduler for periodic tasks
+  bookwyrm-celery-beat:
+    build:
+      context: ./bookwyrm
+      dockerfile: Dockerfile
+    container_name: bookwyrm-celery-beat
+    restart: unless-stopped
+    working_dir: /app
+    command: celery -A celerywyrm beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    environment:
+      # Domain and Security
+      - DOMAIN=${BOOKWYRM_DOMAIN}
+      - SECRET_KEY=${BOOKWYRM_SECRET_KEY}
+
+      # Database
+      - POSTGRES_HOST=bookwyrm-db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${BOOKWYRM_DB_USER:-bookwyrm}
+      - POSTGRES_PASSWORD=${BOOKWYRM_DB_PASSWORD}
+      - POSTGRES_DB=${BOOKWYRM_DB_NAME:-bookwyrm}
+
+      # Redis
+      - REDIS_BROKER_HOST=bookwyrm-redis-broker
+      - REDIS_BROKER_PORT=6379
+      - REDIS_BROKER_PASSWORD=${BOOKWYRM_REDIS_BROKER_PASSWORD}
+      - CELERY_BROKER=redis://:${BOOKWYRM_REDIS_BROKER_PASSWORD}@bookwyrm-redis-broker:6379/0
+
+      # Email (optional - defaults to localhost which won't send emails)
+      - EMAIL_HOST=${BOOKWYRM_EMAIL_HOST:-localhost}
+      - EMAIL_PORT=${BOOKWYRM_EMAIL_PORT:-587}
+      - EMAIL_HOST_USER=${BOOKWYRM_EMAIL_USER:-bookwyrm@localhost}
+      - EMAIL_HOST_PASSWORD=${BOOKWYRM_EMAIL_PASSWORD:-unused}
+      - EMAIL_USE_TLS=${BOOKWYRM_EMAIL_USE_TLS:-false}
+      - EMAIL_USE_SSL=${BOOKWYRM_EMAIL_USE_SSL:-false}
+      - EMAIL_SENDER_NAME=${BOOKWYRM_EMAIL_SENDER_NAME:-BookWyrm}
+      - EMAIL_SENDER_DOMAIN=${BOOKWYRM_EMAIL_SENDER_DOMAIN:-${BOOKWYRM_DOMAIN}}
+
+      # Other settings
+      - TZ=${TIMEZONE:-UTC}
+    volumes:
+      - ./bookwyrm:/app
+    networks:
+      - bookwyrm
+    depends_on:
+      - bookwyrm-celery
+
+  # Nginx reverse proxy for static files and proxying
+  nginx:
+    image: nginx:alpine
+    container_name: bookwyrm-nginx
+    restart: unless-stopped
+    ports:
+      - "${BOOKWYRM_PORT:-8000}:80"
+    volumes:
+      - ./config/nginx.conf:/etc/nginx/nginx.conf:ro
+      - bookwyrm_static:/app/static:ro
+      - ./data/images:/app/bookwyrm/static/images:ro
+    networks:
+      - bookwyrm
+    depends_on:
+      - bookwyrm
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+networks:
+  bookwyrm:
+    driver: bridge
+
+volumes:
+  bookwyrm_static:
