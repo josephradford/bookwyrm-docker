@@ -1,0 +1,229 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  validate:
+    name: Validate Configuration
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Validate docker-compose.yml
+        run: |
+          docker compose config --quiet
+          echo "✓ Docker Compose configuration is valid"
+
+      - name: Validate .env.example
+        run: |
+          if [ ! -f .env.example ]; then
+            echo "ERROR: .env.example not found"
+            exit 1
+          fi
+
+          # Check for required variables
+          required_vars=(
+            "BOOKWYRM_DOMAIN"
+            "BOOKWYRM_SECRET_KEY"
+            "BOOKWYRM_DB_PASSWORD"
+            "BOOKWYRM_REDIS_ACTIVITY_PASSWORD"
+            "BOOKWYRM_REDIS_BROKER_PASSWORD"
+          )
+
+          for var in "${required_vars[@]}"; do
+            if ! grep -q "^$var=" .env.example; then
+              echo "ERROR: Required variable $var not found in .env.example"
+              exit 1
+            fi
+          done
+
+          echo "✓ .env.example contains all required variables"
+
+      - name: Check for Makefile
+        run: |
+          if [ ! -f Makefile ]; then
+            echo "ERROR: Makefile not found"
+            exit 1
+          fi
+
+          # Validate key targets exist
+          required_targets=("help" "setup" "start" "stop" "status" "logs" "update" "clean")
+          for target in "${required_targets[@]}"; do
+            if ! grep -q "^$target:" Makefile; then
+              echo "ERROR: Required Makefile target '$target' not found"
+              exit 1
+            fi
+          done
+
+          echo "✓ Makefile contains all required targets"
+
+  build:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: validate
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Clone Bookwyrm repository
+        run: |
+          git clone -b production --depth 1 https://github.com/bookwyrm-social/bookwyrm.git bookwyrm
+          echo "✓ Bookwyrm repository cloned"
+
+      - name: Create test .env file
+        run: |
+          cat > .env <<EOF
+          BOOKWYRM_DOMAIN=test.local
+          BOOKWYRM_SECRET_KEY=$(openssl rand -base64 45)
+          BOOKWYRM_DB_PASSWORD=$(openssl rand -base64 32)
+          BOOKWYRM_REDIS_ACTIVITY_PASSWORD=$(openssl rand -base64 32)
+          BOOKWYRM_REDIS_BROKER_PASSWORD=$(openssl rand -base64 32)
+          BOOKWYRM_PORT=8000
+          BOOKWYRM_USE_HTTPS=false
+          BOOKWYRM_CSRF_TRUSTED_ORIGINS=http://localhost:8000
+          TIMEZONE=UTC
+          BOOKWYRM_DB_HOST=bookwyrm-db
+          BOOKWYRM_DB_PORT=5432
+          BOOKWYRM_DB_USER=bookwyrm
+          BOOKWYRM_DB_NAME=bookwyrm
+          BOOKWYRM_REDIS_ACTIVITY_HOST=bookwyrm-redis-activity
+          BOOKWYRM_REDIS_BROKER_HOST=bookwyrm-redis-broker
+          BOOKWYRM_EMAIL_HOST=localhost
+          BOOKWYRM_EMAIL_PORT=587
+          BOOKWYRM_EMAIL_USE_TLS=true
+          BOOKWYRM_EMAIL_USE_SSL=false
+          BOOKWYRM_EMAIL_HOST_USER=
+          BOOKWYRM_EMAIL_HOST_PASSWORD=
+          BOOKWYRM_EMAIL_SENDER_NAME=Bookwyrm
+          BOOKWYRM_EMAIL_SENDER_DOMAIN=
+          EOF
+
+      - name: Build Bookwyrm images
+        run: |
+          docker compose build bookwyrm bookwyrm-celery bookwyrm-celery-beat
+          echo "✓ Bookwyrm images built successfully"
+
+      - name: Verify images exist
+        run: |
+          if ! docker images | grep -q "bookwyrm-docker"; then
+            echo "ERROR: Bookwyrm images not found"
+            exit 1
+          fi
+          echo "✓ Docker images verified"
+
+  test:
+    name: Integration Test
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Clone Bookwyrm repository
+        run: |
+          git clone -b production --depth 1 https://github.com/bookwyrm-social/bookwyrm.git bookwyrm
+
+      - name: Create test .env file
+        run: |
+          cat > .env <<EOF
+          BOOKWYRM_DOMAIN=test.local
+          BOOKWYRM_SECRET_KEY=$(openssl rand -base64 45)
+          BOOKWYRM_DB_PASSWORD=$(openssl rand -base64 32)
+          BOOKWYRM_REDIS_ACTIVITY_PASSWORD=$(openssl rand -base64 32)
+          BOOKWYRM_REDIS_BROKER_PASSWORD=$(openssl rand -base64 32)
+          BOOKWYRM_PORT=8000
+          BOOKWYRM_USE_HTTPS=false
+          BOOKWYRM_CSRF_TRUSTED_ORIGINS=http://localhost:8000
+          TIMEZONE=UTC
+          BOOKWYRM_DB_HOST=bookwyrm-db
+          BOOKWYRM_DB_PORT=5432
+          BOOKWYRM_DB_USER=bookwyrm
+          BOOKWYRM_DB_NAME=bookwyrm
+          BOOKWYRM_REDIS_ACTIVITY_HOST=bookwyrm-redis-activity
+          BOOKWYRM_REDIS_BROKER_HOST=bookwyrm-redis-broker
+          BOOKWYRM_EMAIL_HOST=localhost
+          BOOKWYRM_EMAIL_PORT=587
+          BOOKWYRM_EMAIL_USE_TLS=true
+          BOOKWYRM_EMAIL_USE_SSL=false
+          BOOKWYRM_EMAIL_HOST_USER=
+          BOOKWYRM_EMAIL_HOST_PASSWORD=
+          BOOKWYRM_EMAIL_SENDER_NAME=Bookwyrm
+          BOOKWYRM_EMAIL_SENDER_DOMAIN=
+          EOF
+
+      - name: Start services
+        run: |
+          docker compose up -d
+          echo "✓ Services started"
+
+      - name: Wait for services to be healthy
+        run: |
+          echo "Waiting for database to be ready..."
+          timeout 120 bash -c 'until docker compose exec -T bookwyrm-db pg_isready -U bookwyrm; do sleep 2; done'
+          echo "✓ Database is ready"
+
+          echo "Waiting for Bookwyrm to be ready..."
+          sleep 30
+          echo "✓ Services initialization complete"
+
+      - name: Check service status
+        run: |
+          docker compose ps
+
+          # Verify all expected services are running
+          services=("bookwyrm" "bookwyrm-nginx" "bookwyrm-db" "bookwyrm-redis-activity" "bookwyrm-redis-broker" "bookwyrm-celery" "bookwyrm-celery-beat")
+          for service in "${services[@]}"; do
+            if ! docker compose ps | grep -q "$service.*running"; then
+              echo "ERROR: Service $service is not running"
+              docker compose logs $service
+              exit 1
+            fi
+          done
+          echo "✓ All services are running"
+
+      - name: Test nginx responds
+        run: |
+          if ! curl -f http://localhost:8000 > /dev/null 2>&1; then
+            echo "ERROR: Nginx is not responding on port 8000"
+            docker compose logs bookwyrm-nginx
+            docker compose logs bookwyrm
+            exit 1
+          fi
+          echo "✓ Nginx is responding"
+
+      - name: Show logs on failure
+        if: failure()
+        run: |
+          echo "=== Docker Compose Status ==="
+          docker compose ps
+          echo ""
+          echo "=== Bookwyrm Logs ==="
+          docker compose logs bookwyrm
+          echo ""
+          echo "=== Nginx Logs ==="
+          docker compose logs bookwyrm-nginx
+          echo ""
+          echo "=== Database Logs ==="
+          docker compose logs bookwyrm-db
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker compose down -v

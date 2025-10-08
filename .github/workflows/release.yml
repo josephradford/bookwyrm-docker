@@ -1,0 +1,83 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for changelog
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Get previous tag
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || git rev-list --max-parents=0 HEAD)
+          CURRENT_TAG=${GITHUB_REF#refs/tags/}
+
+          echo "Generating changelog from $PREVIOUS_TAG to $CURRENT_TAG"
+
+          # Generate changelog
+          CHANGELOG=$(git log $PREVIOUS_TAG..$CURRENT_TAG --pretty=format:"- %s (%h)" --no-merges)
+
+          # Save to file and output
+          cat > RELEASE_NOTES.md <<EOF
+          ## What's Changed
+
+          $CHANGELOG
+
+          ## Installation
+
+          \`\`\`bash
+          git clone https://github.com/${{ github.repository }}.git
+          cd bookwyrm-docker
+          git checkout $CURRENT_TAG
+          cp .env.example .env
+          # Edit .env with your configuration
+          make setup
+          \`\`\`
+
+          ## Upgrading
+
+          \`\`\`bash
+          cd bookwyrm-docker
+          git fetch --tags
+          git checkout $CURRENT_TAG
+          make update
+          \`\`\`
+
+          ## Documentation
+
+          - [README.md](https://github.com/${{ github.repository }}/blob/$CURRENT_TAG/README.md)
+          - [Troubleshooting Guide](https://github.com/${{ github.repository }}/blob/$CURRENT_TAG/docs/TROUBLESHOOTING.md)
+
+          **Full Changelog**: https://github.com/${{ github.repository }}/compare/$PREVIOUS_TAG...$CURRENT_TAG
+          EOF
+
+          cat RELEASE_NOTES.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          body_path: RELEASE_NOTES.md
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Notify release
+        run: |
+          echo "✅ Release ${GITHUB_REF#refs/tags/} created successfully"
+          echo "View at: https://github.com/${{ github.repository }}/releases/tag/${GITHUB_REF#refs/tags/}"
