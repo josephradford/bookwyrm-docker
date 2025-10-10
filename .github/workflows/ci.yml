@@ -188,7 +188,7 @@ jobs:
           docker compose ps
 
           # Verify all expected services are running (checking for "Up" status)
-          services=("bookwyrm" "bookwyrm-nginx" "bookwyrm-db" "bookwyrm-redis-activity" "bookwyrm-redis-broker" "bookwyrm-celery" "bookwyrm-celery-beat")
+          services=("bookwyrm" "nginx" "bookwyrm-db" "bookwyrm-redis-activity" "bookwyrm-redis-broker" "bookwyrm-celery" "bookwyrm-celery-beat")
           for service in "${services[@]}"; do
             if ! docker compose ps "$service" | grep -q "Up"; then
               echo "ERROR: Service $service is not running"
@@ -202,7 +202,7 @@ jobs:
         run: |
           if ! curl -f http://localhost:8000 > /dev/null 2>&1; then
             echo "ERROR: Nginx is not responding on port 8000"
-            docker compose logs bookwyrm-nginx
+            docker compose logs nginx
             docker compose logs bookwyrm
             exit 1
           fi
@@ -218,7 +218,7 @@ jobs:
           docker compose logs bookwyrm
           echo ""
           echo "=== Nginx Logs ==="
-          docker compose logs bookwyrm-nginx
+          docker compose logs nginx
           echo ""
           echo "=== Database Logs ==="
           docker compose logs bookwyrm-db
