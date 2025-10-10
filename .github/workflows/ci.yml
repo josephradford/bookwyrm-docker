@@ -88,10 +88,10 @@ jobs:
         run: |
           cat > .env <<EOF
           BOOKWYRM_DOMAIN=test.local
-          BOOKWYRM_SECRET_KEY=$(openssl rand -base64 45)
-          BOOKWYRM_DB_PASSWORD=$(openssl rand -base64 32)
-          BOOKWYRM_REDIS_ACTIVITY_PASSWORD=$(openssl rand -base64 32)
-          BOOKWYRM_REDIS_BROKER_PASSWORD=$(openssl rand -base64 32)
+          BOOKWYRM_SECRET_KEY=$(openssl rand -hex 45)
+          BOOKWYRM_DB_PASSWORD=$(openssl rand -hex 32)
+          BOOKWYRM_REDIS_ACTIVITY_PASSWORD=$(openssl rand -hex 32)
+          BOOKWYRM_REDIS_BROKER_PASSWORD=$(openssl rand -hex 32)
           BOOKWYRM_PORT=8000
           BOOKWYRM_USE_HTTPS=false
           BOOKWYRM_CSRF_TRUSTED_ORIGINS=http://localhost:8000
@@ -144,10 +144,10 @@ jobs:
         run: |
           cat > .env <<EOF
           BOOKWYRM_DOMAIN=test.local
-          BOOKWYRM_SECRET_KEY=$(openssl rand -base64 45)
-          BOOKWYRM_DB_PASSWORD=$(openssl rand -base64 32)
-          BOOKWYRM_REDIS_ACTIVITY_PASSWORD=$(openssl rand -base64 32)
-          BOOKWYRM_REDIS_BROKER_PASSWORD=$(openssl rand -base64 32)
+          BOOKWYRM_SECRET_KEY=$(openssl rand -hex 45)
+          BOOKWYRM_DB_PASSWORD=$(openssl rand -hex 32)
+          BOOKWYRM_REDIS_ACTIVITY_PASSWORD=$(openssl rand -hex 32)
+          BOOKWYRM_REDIS_BROKER_PASSWORD=$(openssl rand -hex 32)
           BOOKWYRM_PORT=8000
           BOOKWYRM_USE_HTTPS=false
           BOOKWYRM_CSRF_TRUSTED_ORIGINS=http://localhost:8000
