@@ -215,6 +215,7 @@ server {
 ```
 
 Then set in `.env`:
+
 ```bash
 BOOKWYRM_USE_HTTPS=true
 BOOKWYRM_CSRF_TRUSTED_ORIGINS=https://bookwyrm.example.com
@@ -223,16 +224,19 @@ BOOKWYRM_CSRF_TRUSTED_ORIGINS=https://bookwyrm.example.com
 ### Backups
 
 **Database backup:**
+
 ```bash
 docker exec bookwyrm-db pg_dump -U bookwyrm bookwyrm > backup.sql
 ```
 
 **Full data backup:**
+
 ```bash
 tar czf bookwyrm-backup-$(date +%Y%m%d).tar.gz data/
 ```
 
 **Restore database:**
+
 ```bash
 cat backup.sql | docker exec -i bookwyrm-db psql -U bookwyrm -d bookwyrm
 ```
@@ -240,6 +244,7 @@ cat backup.sql | docker exec -i bookwyrm-db psql -U bookwyrm -d bookwyrm
 ### Monitoring
 
 Check service health:
+
 ```bash
 make status                          # Container status
 docker compose logs --tail=100       # Recent logs
@@ -257,6 +262,7 @@ Health check endpoints:
 ### Container Keeps Restarting
 
 **Check logs:**
+
 ```bash
 make logs-web
 ```
@@ -270,6 +276,7 @@ make logs-web
 ### Static Files Not Loading (Plain Text Website)
 
 Run the initialization sequence:
+
 ```bash
 make init
 ```
@@ -279,16 +286,19 @@ This compiles themes and collects static files.
 ### Database Connection Errors
 
 **Verify database is healthy:**
+
 ```bash
 docker compose ps bookwyrm-db
 ```
 
 **Check database logs:**
+
 ```bash
 docker compose logs bookwyrm-db
 ```
 
 **Reset database (WARNING: destroys data):**
+
 ```bash
 docker compose down -v
 rm -rf data/pgdata
@@ -298,6 +308,7 @@ make setup
 ### Volume Mount Issues
 
 If you see "module not found" errors, check volume mounts:
+
 ```bash
 docker exec bookwyrm ls -la /app/bookwyrm/static/css/
 ```
@@ -307,6 +318,7 @@ Should show SCSS files. If empty, the volume mount shadowed the source files.
 ### Complete Reset
 
 To start fresh (destroys all data):
+
 ```bash
 make clean
 rm -rf bookwyrm/ data/
