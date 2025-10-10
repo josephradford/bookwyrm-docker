@@ -187,12 +187,12 @@ jobs:
         run: |
           docker compose ps
 
-          # Verify all expected services are running
+          # Verify all expected services are running (checking for "Up" status)
           services=("bookwyrm" "bookwyrm-nginx" "bookwyrm-db" "bookwyrm-redis-activity" "bookwyrm-redis-broker" "bookwyrm-celery" "bookwyrm-celery-beat")
           for service in "${services[@]}"; do
-            if ! docker compose ps | grep -q "$service.*running"; then
+            if ! docker compose ps "$service" | grep -q "Up"; then
               echo "ERROR: Service $service is not running"
-              docker compose logs $service
+              docker compose logs "$service"
               exit 1
             fi
           done

@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # PostgreSQL database for Bookwyrm
   bookwyrm-db:
@@ -82,9 +80,11 @@ services:
       - REDIS_ACTIVITY_HOST=bookwyrm-redis-activity
       - REDIS_ACTIVITY_PORT=6379
       - REDIS_ACTIVITY_PASSWORD=${BOOKWYRM_REDIS_ACTIVITY_PASSWORD}
+      - REDIS_ACTIVITY_URL=redis://:${BOOKWYRM_REDIS_ACTIVITY_PASSWORD}@bookwyrm-redis-activity:6379/0
       - REDIS_BROKER_HOST=bookwyrm-redis-broker
       - REDIS_BROKER_PORT=6379
       - REDIS_BROKER_PASSWORD=${BOOKWYRM_REDIS_BROKER_PASSWORD}
+      - REDIS_BROKER_URL=redis://:${BOOKWYRM_REDIS_BROKER_PASSWORD}@bookwyrm-redis-broker:6379/0
       - CELERY_BROKER=redis://:${BOOKWYRM_REDIS_BROKER_PASSWORD}@bookwyrm-redis-broker:6379/0
 
       # Email (optional - defaults to localhost which won't send emails)
@@ -146,9 +146,11 @@ services:
       - REDIS_ACTIVITY_HOST=bookwyrm-redis-activity
       - REDIS_ACTIVITY_PORT=6379
       - REDIS_ACTIVITY_PASSWORD=${BOOKWYRM_REDIS_ACTIVITY_PASSWORD}
+      - REDIS_ACTIVITY_URL=redis://:${BOOKWYRM_REDIS_ACTIVITY_PASSWORD}@bookwyrm-redis-activity:6379/0
       - REDIS_BROKER_HOST=bookwyrm-redis-broker
       - REDIS_BROKER_PORT=6379
       - REDIS_BROKER_PASSWORD=${BOOKWYRM_REDIS_BROKER_PASSWORD}
+      - REDIS_BROKER_URL=redis://:${BOOKWYRM_REDIS_BROKER_PASSWORD}@bookwyrm-redis-broker:6379/0
       - CELERY_BROKER=redis://:${BOOKWYRM_REDIS_BROKER_PASSWORD}@bookwyrm-redis-broker:6379/0
 
       # Email (optional - defaults to localhost which won't send emails)
@@ -199,6 +201,7 @@ services:
       - REDIS_BROKER_HOST=bookwyrm-redis-broker
       - REDIS_BROKER_PORT=6379
       - REDIS_BROKER_PASSWORD=${BOOKWYRM_REDIS_BROKER_PASSWORD}
+      - REDIS_BROKER_URL=redis://:${BOOKWYRM_REDIS_BROKER_PASSWORD}@bookwyrm-redis-broker:6379/0
       - CELERY_BROKER=redis://:${BOOKWYRM_REDIS_BROKER_PASSWORD}@bookwyrm-redis-broker:6379/0
 
       # Email (optional - defaults to localhost which won't send emails)
