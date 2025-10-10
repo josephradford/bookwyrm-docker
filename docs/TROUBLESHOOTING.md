@@ -5,11 +5,11 @@ This guide covers common issues encountered during Bookwyrm deployment and their
 ## Table of Contents
 
 1. [Container Issues](#container-issues)
-2. [Static File Problems](#static-file-problems)
-3. [Database Issues](#database-issues)
-4. [Network and Port Conflicts](#network-and-port-conflicts)
-5. [Volume Mount Problems](#volume-mount-problems)
-6. [Performance Issues](#performance-issues)
+1. [Static File Problems](#static-file-problems)
+1. [Database Issues](#database-issues)
+1. [Network and Port Conflicts](#network-and-port-conflicts)
+1. [Volume Mount Problems](#volume-mount-problems)
+1. [Performance Issues](#performance-issues)
 
 ---
 
@@ -20,6 +20,7 @@ This guide covers common issues encountered during Bookwyrm deployment and their
 **Symptom:** `docker compose ps` shows container repeatedly restarting
 
 **Diagnosis:**
+
 ```bash
 make logs-web
 docker compose logs bookwyrm --tail=50
@@ -32,6 +33,7 @@ docker compose logs bookwyrm --tail=50
 **Error:** Container starts Python interpreter and exits immediately
 
 **Solution:** Verify `docker-compose.yml` has:
+
 ```yaml
 bookwyrm:
   command: gunicorn bookwyrm.wsgi:application --bind 0.0.0.0:8000
@@ -42,6 +44,7 @@ bookwyrm:
 **Error:** `connection refused` or `could not connect to server`
 
 **Solution:** Wait 30 seconds for database to initialize, then check:
+
 ```bash
 docker compose ps bookwyrm-db  # Should show "healthy"
 ```
@@ -51,6 +54,7 @@ docker compose ps bookwyrm-db  # Should show "healthy"
 **Error:** `Environment variable "EMAIL_HOST" not set`
 
 **Solution:** Ensure `.env` has all required variables:
+
 ```bash
 make env-check
 make validate
@@ -65,9 +69,10 @@ Add missing variables to `.env` (see `.env.example`)
 **Cause:** Missing startup command or command exits successfully
 
 **Solution:**
+
 1. Check `docker-compose.yml` has proper `command:` directive
-2. For `bookwyrm` service: `command: gunicorn bookwyrm.wsgi:application --bind 0.0.0.0:8000`
-3. For workers: Verify Celery commands are correct
+1. For `bookwyrm` service: `command: gunicorn bookwyrm.wsgi:application --bind 0.0.0.0:8000`
+1. For workers: Verify Celery commands are correct
 
 ---
 
@@ -90,6 +95,7 @@ docker exec bookwyrm ls -la /app/bookwyrm/static/css/themes/
 Should show `bookwyrm-light.css` and `bookwyrm-dark.css`
 
 If missing:
+
 ```bash
 docker exec bookwyrm python manage.py compile_themes
 ```
@@ -101,6 +107,7 @@ docker exec bookwyrm python manage.py collectstatic --no-input
 ```
 
 Verify files collected:
+
 ```bash
 docker exec bookwyrm ls -la /app/static/css/themes/
 ```
@@ -114,6 +121,7 @@ docker compose logs nginx
 Look for 404 errors on `/static/` paths
 
 Verify nginx is running:
+
 ```bash
 docker compose ps nginx  # Should show "Up"
 ```
@@ -121,6 +129,7 @@ docker compose ps nginx  # Should show "Up"
 #### Step 4: Full Re-initialization
 
 If above steps don't work:
+
 ```bash
 make init
 docker compose restart nginx bookwyrm
@@ -133,6 +142,7 @@ docker compose restart nginx bookwyrm
 **Cause:** Volume mount shadowing static directory
 
 **Diagnosis:**
+
 ```bash
 docker exec bookwyrm find /app -name "*.scss" | head -10
 ```
@@ -142,6 +152,7 @@ Should show SCSS files. If empty, volume mount is shadowing.
 **Solution:**
 
 Check `docker-compose.yml` volumes for `bookwyrm` service. Should NOT have:
+
 ```yaml
 # BAD - shadows static files:
 volumes:
@@ -149,6 +160,7 @@ volumes:
 ```
 
 Should have:
+
 ```yaml
 # GOOD:
 volumes:
@@ -158,6 +170,7 @@ volumes:
 ```
 
 Fix and recreate:
+
 ```bash
 docker compose up -d --force-recreate bookwyrm
 make init
@@ -178,6 +191,7 @@ make init
 #### Option 1: Use Correct Password
 
 Check `.env`:
+
 ```bash
 grep BOOKWYRM_DB_PASSWORD .env
 ```
@@ -186,7 +200,7 @@ The password in `.env` must match what's in the database (set during first initi
 
 #### Option 2: Reset Database
 
-**WARNING: Destroys all data**
+##### WARNING: Destroys all data
 
 ```bash
 docker compose down
@@ -203,6 +217,7 @@ make init
 **Cause:** Migrations not run
 
 **Solution:**
+
 ```bash
 docker exec bookwyrm python manage.py migrate --no-input
 docker exec bookwyrm python manage.py initdb
@@ -211,6 +226,7 @@ docker exec bookwyrm python manage.py collectstatic --no-input
 ```
 
 Or simply:
+
 ```bash
 make init
 ```
@@ -222,6 +238,7 @@ make init
 **Cause:** Database already initialized, `initdb` not idempotent
 
 **Solution:** Skip `initdb`, run other steps:
+
 ```bash
 docker exec bookwyrm python manage.py migrate --no-input
 docker exec bookwyrm python manage.py compile_themes
@@ -239,6 +256,7 @@ The `make init` command handles this automatically.
 **Error:** `Bind for 0.0.0.0:8000 failed: port is already allocated`
 
 **Diagnosis:**
+
 ```bash
 # Find what's using port 8000
 lsof -i :8000
@@ -251,11 +269,13 @@ sudo netstat -tlnp | grep :8000
 #### Option 1: Change Bookwyrm Port
 
 Edit `.env`:
+
 ```bash
 BOOKWYRM_PORT=8080  # Or any available port
 ```
 
 Restart:
+
 ```bash
 docker compose down
 docker compose up -d
@@ -279,6 +299,7 @@ sudo systemctl stop <service-name>
 **Solution:**
 
 1. Check firewall allows port:
+
 ```bash
 # UFW (Ubuntu):
 sudo ufw allow 8000
@@ -288,14 +309,16 @@ sudo firewall-cmd --add-port=8000/tcp --permanent
 sudo firewall-cmd --reload
 ```
 
-2. Verify docker binding:
+1. Verify docker binding:
+
 ```bash
 docker compose ps nginx
 ```
 
 Should show: `0.0.0.0:8000->80/tcp` (not `127.0.0.1:8000`)
 
-3. Check `BOOKWYRM_CSRF_TRUSTED_ORIGINS` in `.env`:
+1. Check `BOOKWYRM_CSRF_TRUSTED_ORIGINS` in `.env`:
+
 ```bash
 BOOKWYRM_CSRF_TRUSTED_ORIGINS=http://localhost:8000,http://192.168.1.100:8000
 ```
@@ -311,6 +334,7 @@ BOOKWYRM_CSRF_TRUSTED_ORIGINS=http://localhost:8000,http://192.168.1.100:8000
 **Cause:** Source code not mounted into container
 
 **Diagnosis:**
+
 ```bash
 docker exec bookwyrm ls -la /app/bookwyrm/
 ```
@@ -320,6 +344,7 @@ Should show Python files. If empty, volume mount failed.
 **Solution:**
 
 Verify `docker-compose.yml`:
+
 ```yaml
 bookwyrm:
   volumes:
@@ -327,11 +352,13 @@ bookwyrm:
 ```
 
 Check Bookwyrm repo cloned:
+
 ```bash
 ls -la bookwyrm/
 ```
 
 If missing:
+
 ```bash
 make clone-repo
 docker compose up -d --force-recreate bookwyrm
@@ -346,12 +373,14 @@ docker compose up -d --force-recreate bookwyrm
 **Solution:**
 
 Fix permissions on host:
+
 ```bash
 chmod -R 755 data/
 chown -R $(id -u):$(id -g) data/
 ```
 
 Or run container as specific user (add to service in `docker-compose.yml`):
+
 ```yaml
 user: "1000:1000"  # Your user ID
 ```
@@ -367,15 +396,17 @@ user: "1000:1000"  # Your user ID
 **Normal behavior:** First load takes 5-10 seconds, subsequent loads are fast
 
 **To improve:**
+
 1. Increase container resources (in Docker Desktop settings)
-2. Use SSD for data volumes
-3. Enable Django caching (requires Redis configuration)
+1. Use SSD for data volumes
+1. Enable Django caching (requires Redis configuration)
 
 ### High Memory Usage
 
 **Symptom:** Containers using excessive RAM
 
 **Diagnosis:**
+
 ```bash
 docker stats
 ```
@@ -383,6 +414,7 @@ docker stats
 **Solutions:**
 
 1. **Limit container memory** (add to service in `docker-compose.yml`):
+
 ```yaml
 deploy:
   resources:
@@ -390,12 +422,14 @@ deploy:
       memory: 1G
 ```
 
-2. **Reduce Gunicorn workers** (modify command):
+1. **Reduce Gunicorn workers** (modify command):
+
 ```yaml
 command: gunicorn bookwyrm.wsgi:application --bind 0.0.0.0:8000 --workers 2
 ```
 
-3. **Optimize PostgreSQL** (add to bookwyrm-db environment):
+1. **Optimize PostgreSQL** (add to bookwyrm-db environment):
+
 ```yaml
 environment:
   - shared_buffers=256MB
@@ -409,11 +443,13 @@ environment:
 **Solution:**
 
 Run vacuum and analyze:
+
 ```bash
 docker exec bookwyrm-db vacuumdb -U bookwyrm -d bookwyrm -z
 ```
 
 Check database size:
+
 ```bash
 docker exec bookwyrm-db psql -U bookwyrm -d bookwyrm -c "
   SELECT pg_size_pretty(pg_database_size('bookwyrm'));"
@@ -451,27 +487,29 @@ curl http://localhost:8000
 If this guide doesn't solve your issue:
 
 1. **Check logs:**
+
    ```bash
    make logs > bookwyrm-logs.txt
    ```
 
-2. **Gather system info:**
+1. **Gather system info:**
+
    ```bash
    docker version
    docker compose version
    docker compose config
    ```
 
-3. **Create GitHub Issue:**
+1. **Create GitHub Issue:**
    - Include logs
    - Include docker-compose config output
    - Describe what you tried
    - Note your environment (OS, Docker version)
 
-4. **Bookwyrm Community:**
-   - Official docs: https://docs.joinbookwyrm.com/
-   - Matrix chat: https://matrix.to/#/#bookwyrm:matrix.org
-   - GitHub: https://github.com/bookwyrm-social/bookwyrm/issues
+1. **Bookwyrm Community:**
+   - Official docs: [https://docs.joinbookwyrm.com/](https://docs.joinbookwyrm.com/)
+   - Matrix chat: [https://matrix.to/#/#bookwyrm:matrix.org](https://matrix.to/#/#bookwyrm:matrix.org)
+   - GitHub: [https://github.com/bookwyrm-social/bookwyrm/issues](https://github.com/bookwyrm-social/bookwyrm/issues)
 
 ---
 
@@ -480,26 +518,29 @@ If this guide doesn't solve your issue:
 **Avoid future issues:**
 
 1. **Regular backups:**
+
    ```bash
    tar czf backup-$(date +%Y%m%d).tar.gz data/
    ```
 
-2. **Monitor logs:**
+1. **Monitor logs:**
+
    ```bash
    docker compose logs -f --tail=100
    ```
 
-3. **Keep updated:**
+1. **Keep updated:**
+
    ```bash
    make update  # Updates Bookwyrm monthly
    ```
 
-4. **Test before production:**
+1. **Test before production:**
    - Deploy in staging first
    - Test all functionality
    - Verify backups restore correctly
 
-5. **Document customizations:**
+1. **Document customizations:**
    - Note any changes to docker-compose.yml
    - Keep list of installed plugins/themes
    - Track environment variable changes

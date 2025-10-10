@@ -1,12 +1,18 @@
 # Bookwyrm Docker
 
-**Production-ready Docker Compose deployment for Bookwyrm, the federated social reading platform.**
+**Production-ready Docker Compose deployment for Bookwyrm, the federated social
+reading platform.**
 
-This project provides a complete, ready-to-deploy Docker setup for [Bookwyrm](https://joinbookwyrm.com/) that handles all the complexity of building from source, configuring nginx, compiling static assets, and initializing the database.
+This project provides a complete, ready-to-deploy Docker setup for
+[Bookwyrm](https://joinbookwyrm.com/) that handles all the complexity of
+building from source, configuring nginx, compiling static assets, and
+initializing the database.
 
 ## Why This Project Exists
 
-Bookwyrm doesn't publish pre-built Docker images, requiring users to build from the official Git repository. This project solves the deployment complexity by providing:
+Bookwyrm doesn't publish pre-built Docker images, requiring users to build from
+the official Git repository. This project solves the deployment complexity by
+providing:
 
 ✅ Complete multi-container setup (web, database, cache, workers, reverse proxy)
 ✅ Automated build and initialization process
@@ -55,7 +61,7 @@ This deployment includes 7 Docker containers:
 
 All data is stored in the `data/` directory:
 
-```
+```text
 data/
 ├── pgdata/          # PostgreSQL database
 ├── redis-activity/  # Redis persistence (activity)
@@ -67,7 +73,7 @@ data/
 
 ### Network Architecture
 
-```
+```text
                                   ┌──────────────┐
                                   │    nginx     │
                                   │   (port 8000)│
@@ -241,6 +247,7 @@ docker stats                         # Resource usage
 ```
 
 Health check endpoints:
+
 - Nginx: `http://localhost:8000` (should return Bookwyrm homepage)
 - Database: Built-in health checks via `pg_isready`
 - Redis: Built-in health checks via `redis-cli ping`
@@ -255,6 +262,7 @@ make logs-web
 ```
 
 **Common issues:**
+
 1. **Database not ready** - Wait 30 seconds and check again
 2. **Missing environment variables** - Run `make env-check`
 3. **Port conflict** - Change `BOOKWYRM_PORT` in `.env`
@@ -316,7 +324,7 @@ See [docs/TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) for more solutions.
 
 ## Project Structure
 
-```
+```text
 bookwyrm-docker/
 ├── docker-compose.yml        # Container orchestration
 ├── Makefile                  # Deployment commands
@@ -348,6 +356,7 @@ bookwyrm-docker/
 Contributions are welcome! This project aims to make Bookwyrm deployment as simple as possible.
 
 **Areas for contribution:**
+
 - Improved documentation
 - Additional deployment scenarios (Kubernetes, cloud platforms)
 - Monitoring and observability integrations
