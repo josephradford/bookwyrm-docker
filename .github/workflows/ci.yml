@@ -179,9 +179,28 @@ jobs:
           timeout 120 bash -c 'until docker compose exec -T bookwyrm-db pg_isready -U bookwyrm; do sleep 2; done'
           echo "✓ Database is ready"
 
-          echo "Waiting for Bookwyrm to be ready..."
-          sleep 30
-          echo "✓ Services initialization complete"
+      - name: Initialize Bookwyrm
+        run: |
+          echo "Running database migrations..."
+          docker compose exec -T bookwyrm python manage.py migrate --no-input
+
+          echo "Initializing database..."
+          docker compose exec -T bookwyrm python manage.py initdb || true
+
+          echo "Compiling themes..."
+          docker compose exec -T bookwyrm python manage.py compile_themes
+
+          echo "Collecting static files..."
+          docker compose exec -T bookwyrm python manage.py collectstatic --no-input
+
+          echo "✓ Bookwyrm initialization complete"
+
+      - name: Restart services after initialization
+        run: |
+          echo "Restarting services to ensure all are healthy..."
+          docker compose restart bookwyrm-celery bookwyrm-celery-beat
+          sleep 10
+          echo "✓ Services restarted"
 
       - name: Check service status
         run: |
